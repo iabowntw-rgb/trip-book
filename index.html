@@ -199,6 +199,22 @@ body.ro .tcard { cursor: default; }
 
 /* money */
 .money-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.pc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; align-items: start; }
+.pc.wide { grid-column: 1 / -1; }
+.pc-h { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; min-height: 44px; }
+.pc-h > :not(.pc-fold) { margin-left: auto; }
+.pc-fold { border: 0; background: none; color: inherit; font: inherit; font-size: 16px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 8px; margin-left: -8px; border-radius: 8px; text-align: left; cursor: pointer; }
+.pc.plain .pc-fold { font-size: 18px; }
+.pc-fold:hover { background: var(--surface-2); }
+.pc-ar { width: 14px; color: var(--muted); font-size: 13px; }
+.pc-sum { color: var(--muted); font-size: 15px; text-align: right; }
+.pc.folded { gap: 0; }
+.card.pc.folded { padding-top: 8px; padding-bottom: 8px; }
+.pc-h > .todo-tools { flex: 1 1 100%; margin-left: 0; display: flex; gap: 8px; }
+.pc-h > .todo-tools select { flex: 1; min-width: 0; }
+.pc-foot { display: flex; justify-content: flex-end; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+.hint { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hint-x { border: 1px solid var(--field-edge); background: none; color: inherit; font: inherit; font-size: 13px; border-radius: 999px; padding: 4px 10px; min-height: 32px; cursor: pointer; }
 .big { font-family: var(--f-mono); font-size: 30px; font-weight: 600; line-height: 1.15; }
 .progress.over > div { background: var(--bad); }
 .bad-t { color: var(--bad); }
@@ -1455,8 +1471,8 @@ function renderTrip(t) {
   let body = '';
   if (S.tab === 'todo') body = renderTodosTab(t, todos);
   else if (S.tab === 'plan') body = renderPlanTab(t);
-  else if (S.tab === 'book') body = (aiText && S.canWrite ? `<div class="card section-h"><p class="small"><b>最快的方法：</b>把訂票、訂房確認信貼上來，或上傳訂單截圖，自動填好機票和住宿。</p><button class="btn primary" data-act="import" data-trip="${t.id}">貼上確認信</button></div>` : '') + renderFlightsTab(t) + renderStaysTab(t);
-  else body = renderMoneyTab(t) + renderRatesTab(t);
+  else if (S.tab === 'book') body = renderBookTab(t);
+  else body = renderMoneyTab(t);
   // slide the section in only when it changes, not on every data refresh
   const key = [t.id, S.tab, S.todoView].join('|'), anim = S.bodyKey !== key; S.bodyKey = key;
   body = `<div class="tab-body ${anim ? 'anim' : ''}">${body}</div>`;
@@ -1538,23 +1554,79 @@ function renderTodosTab(t, todos) {
         <button class="btn-sm w" data-act="add-todo" data-trip="${t.id}">＋ 新增待辦</button>
       </div>
     </div>
-    ${custom && list.length > 1 ? `<p class="small muted w">電腦可直接拖曳卡片；手機請按住卡片約 0.3 秒再拖。</p>` : ''}
+    ${custom && list.length > 1 ? hint('drag', '電腦可直接拖曳卡片；手機請按住卡片約 0.3 秒再拖。', 'w') : ''}
     ${list.length ? `<ul class="cards" ${sortableAttr(t)}>${list.map(x => todoCard(t, x)).join('')}</ul>`
       : `<div class="card empty-inline">${f === 'all' ? (todos.length ? '全部辦好了，出發吧！' : '還沒有待辦。') : '這一頁沒有待辦。'}</div>`}
     ${doneSec('todo', doneL.length, '已完成', `<ul class="cards">${doneL.map(x => todoCard(t, x)).join('')}</ul>`)}
   </section>`;
 }
 
-function renderFlightsTab(t) {
+function renderBookTab(t) {
   const fl = items(t.flights).sort((a, b) => (a.depart || '').localeCompare(b.depart || ''));
-  return `<section class="stack"><div class="section-h"><h2>機票</h2><button class="btn w" data-act="add-flight" data-trip="${t.id}">＋ 新增航班</button></div>
-    ${fl.length ? fl.map(f => passHTML(t, f)).join('') : `<div class="card empty-inline">還沒加機票，按「＋ 新增航班」新增。存好航班和訂位代號，到機場就不用再翻信箱${aiText && S.canWrite ? `。<br><button class="btn-sm" style="margin-top:8px" data-act="import" data-trip="${t.id}">貼上確認信，自動填好</button>` : '。'}</div>`}</section>`;
+  const st = items(t.stays).sort((a, b) => (a.checkin || '').localeCompare(b.checkin || ''));
+  return `<section class="stack">${pageCards('book', {
+    import: aiText && S.canWrite && { title: '貼上確認信', sum: '自動填好機票和住宿',
+      body: `<div class="section-h"><p class="small"><b>最快的方法：</b>把訂票、訂房確認信貼上來，或上傳訂單截圖，自動填好機票和住宿。</p><button class="btn primary" data-act="import" data-trip="${t.id}">貼上確認信</button></div>` },
+    flights: { title: '機票', plain: true, sum: fl.length ? `${fl.length} 班` : '還沒加',
+      tools: `<button class="btn w" data-act="add-flight" data-trip="${t.id}">＋ 新增航班</button>`,
+      body: fl.length ? fl.map(f => passHTML(t, f)).join('') : `<div class="card empty-inline">還沒加機票，按「＋ 新增航班」新增。存好航班和訂位代號，到機場就不用再翻信箱${aiText && S.canWrite ? `。<br><button class="btn-sm" style="margin-top:8px" data-act="import" data-trip="${t.id}">貼上確認信，自動填好</button>` : '。'}</div>` },
+    stays: { title: '住宿', plain: true, sum: st.length ? `${st.length} 間` : '還沒加',
+      tools: `<button class="btn w" data-act="add-stay" data-trip="${t.id}">＋ 新增住宿</button>`,
+      body: st.length ? st.map(s => `<div class="card stay">${stayInner(t, s)}</div>`).join('') : `<div class="card empty-inline">還沒加住宿，按「＋ 新增住宿」新增。存好地址和訂房編號，「給司機看」才有內容${aiText && S.canWrite ? `。<br><button class="btn-sm" style="margin-top:8px" data-act="import" data-trip="${t.id}">貼上訂房確認信，自動填好</button>` : '。'}</div>` }
+  })}</section>`;
 }
 
-function renderStaysTab(t) {
-  const st = items(t.stays).sort((a, b) => (a.checkin || '').localeCompare(b.checkin || ''));
-  return `<section class="stack"><div class="section-h"><h2>住宿</h2><button class="btn w" data-act="add-stay" data-trip="${t.id}">＋ 新增住宿</button></div>
-    ${st.length ? st.map(s => `<div class="card stay">${stayInner(t, s)}</div>`).join('') : `<div class="card empty-inline">還沒加住宿，按「＋ 新增住宿」新增。存好地址和訂房編號，「給司機看」才有內容${aiText && S.canWrite ? `。<br><button class="btn-sm" style="margin-top:8px" data-act="import" data-trip="${t.id}">貼上訂房確認信，自動填好</button>` : '。'}</div>`}</section>`;
+// ---------- cards each person can fold, hide and reorder (記帳、訂單) ----------
+const PAGE_CARDS = {
+  money: { total: '總花費', cash: '錢包現金', split: '分帳', daily: '每日花費', cats: '分類', receipts: '收據牆', list: '明細', rates: '匯率換算' },
+  book: { import: '貼上確認信', flights: '機票', stays: '住宿' }
+};
+const PAGE_NAMES = { money: '記帳', book: '訂單' };
+const pg = p => ((S.home.pages || {})[p]) || {};
+function pageOrder(p) {
+  const all = Object.keys(PAGE_CARDS[p]), o = (pg(p).order || []).filter(k => all.includes(k));
+  return [...o, ...all.filter(k => !o.includes(k))];
+}
+function setPage(p, patch) {
+  S.home = { ...S.home, pages: { ...(S.home.pages || {}), [p]: { ...pg(p), ...patch } } };
+  saveHome();
+}
+// cards: { key: { title, sum, tools, body, wide, plain } | false } — false means it doesn't apply to this trip
+function pageCards(p, cards) {
+  const st = pg(p), hid = new Set(st.hidden || []), fold = st.folded || {};
+  const ks = pageOrder(p).filter(k => cards[k]), shown = ks.filter(k => !hid.has(k)), nh = ks.length - shown.length;
+  const one = k => {
+    const c = cards[k], f = !!fold[k];
+    const head = `<div class="pc-h"><button class="pc-fold" data-act="pc-fold" data-page="${p}" data-k="${k}" aria-expanded="${!f}"><span class="pc-ar" aria-hidden="true">${f ? '▸' : '▾'}</span>${c.title}</button>${f ? (c.sum ? `<span class="pc-sum">${c.sum}</span>` : '') : (c.tools || '')}</div>`;
+    return c.plain ? `<section class="stack pc plain wide ${f ? 'folded' : ''}" data-pc="${k}">${head}${f ? '' : c.body}</section>`
+      : `<div class="card stack pc ${c.wide ? 'wide' : ''} ${f ? 'folded' : ''}" data-pc="${k}">${head}${f ? '' : c.body}</div>`;
+  };
+  return `<div class="pc-grid">${shown.map(one).join('')}</div>
+    <div class="pc-foot">${nh ? `<span class="small muted">已隱藏 ${nh} 張卡片</span>` : ''}<button class="btn-sm" data-act="page-edit" data-page="${p}">自訂這頁</button></div>`;
+}
+function openPageEdit(p) {
+  let order = pageOrder(p).filter(k => k !== 'import' || aiText);
+  const hid = new Set(pg(p).hidden || []);
+  const f = $('#dlgForm');
+  const draw = () => {
+    f.innerHTML = `<h2>自訂「${PAGE_NAMES[p]}」</h2>
+      <p class="small muted">勾選要顯示的卡片，用箭頭調整順序。所有旅程都會套用。${S.uid && S.canWrite && !WEB ? '設定跟著你的帳號，手機和電腦一致。' : '設定存在這台裝置。'}</p>
+      <ul class="qe-list">${order.map((k, i) => `<li class="qe-row"><label><input type="checkbox" data-k="${k}" ${hid.has(k) ? '' : 'checked'}>${PAGE_CARDS[p][k]}</label>
+        <span><button type="button" class="icon-btn" data-mv="${i}" data-d="-1" aria-label="上移：${PAGE_CARDS[p][k]}" ${i === 0 ? 'disabled' : ''}>↑</button><button type="button" class="icon-btn" data-mv="${i}" data-d="1" aria-label="下移：${PAGE_CARDS[p][k]}" ${i === order.length - 1 ? 'disabled' : ''}>↓</button></span></li>`).join('')}</ul>
+      <p class="small muted">有些卡片只在需要時出現，例如有旅伴才有「分帳」、有記帳才有「每日花費」。</p>
+      <div class="dlg-actions"><button type="button" class="btn ghost" id="peReset" style="margin-right:auto">恢復預設</button><button type="button" class="btn ghost" data-act="dlg-close">取消</button><button type="submit" class="btn primary">儲存</button></div>`;
+    f.querySelectorAll('input[data-k]').forEach(cb => { cb.onchange = () => { cb.checked ? hid.delete(cb.dataset.k) : hid.add(cb.dataset.k); }; });
+    f.querySelectorAll('[data-mv]').forEach(b => { b.onclick = () => { const i = +b.dataset.mv, j = i + +b.dataset.d; [order[i], order[j]] = [order[j], order[i]]; draw(); }; });
+    $('#peReset').onclick = () => { order = Object.keys(PAGE_CARDS[p]).filter(k => k !== 'import' || aiText); hid.clear(); draw(); };
+  };
+  draw();
+  f.onsubmit = e => { e.preventDefault(); setPage(p, { order, hidden: [...hid] }); dlg.close(); render(); };
+  dlg.showModal();
+}
+// one-line tips: shown until you press 知道了
+function hint(k, text, cls = '') {
+  if ((S.home.hints || {})[k]) return '';
+  return `<p class="small muted hint ${cls}">${text}<button type="button" class="hint-x" data-act="hint-off" data-k="${k}" aria-label="知道了，不再顯示這行說明">知道了 ✕</button></p>`;
 }
 
 function planCard(t, p, isNext) {
@@ -1578,11 +1650,12 @@ function renderPlanTab(t) {
   if (!days.includes(S.planDay)) S.planDay = days.includes(today()) ? today() : days[0];
   const wish = items(t.plans).filter(p => !p.day).sort((a, b) => (a.title || '').localeCompare(b.title || ''));
   return `<section class="stack">
-    <div class="section-h"><h2>每日行程</h2><span class="small muted w">點圓圈打勾；點項目可編輯；把項目拖到另一天就能改日期</span></div>
+    <div class="section-h"><h2>每日行程</h2></div>
+    ${hint('plan', '點圓圈打勾；點項目可編輯；把項目拖到另一天就能改日期。', 'w')}
     <div class="card wish stack">
       <div class="section-h"><button class="fold" style="border:0;background:none;font:inherit;color:inherit;padding:0;font-weight:700" data-act="wish-toggle" aria-expanded="${S.wishOpen}">${S.wishOpen ? '▾' : '▸'} 想去清單 · ${wish.length} 項</button>
         <button class="btn-sm w" data-act="add-plan" data-trip="${t.id}" data-day="">＋ 新增想去的</button></div>
-      ${S.wishOpen ? `<p class="small muted">還沒決定哪天去的店和景點放這裡。${S.canWrite ? '按住拖到某一天，再點開補上時間。' : ''}</p>
+      ${S.wishOpen ? `${hint('wish', `還沒決定哪天去的店和景點放這裡。${S.canWrite ? '按住拖到某一天，再點開補上時間。' : ''}`)}
         <ul class="plans" ${S.canWrite ? `data-plans="${t.id}" data-day=""` : ''}>${wish.map(p => planCard(t, p)).join('')}</ul>` : ''}
     </div>
     <div class="day-chips" role="tablist">${days.map((d, i) => `<button class="filter" role="tab" aria-selected="${S.planDay === d}" data-act="plan-day" data-day="${d}">Day ${i + 1}<span class="n">${parseD(d).getMonth() + 1}/${parseD(d).getDate()}</span></button>`).join('')}</div>
@@ -1627,31 +1700,34 @@ function renderMoneyTab(t) {
   return `<section class="stack">
     <div class="todo-bar"><h2 style="font-size:17px">記帳</h2>
       <div class="todo-tools">${dispSeg([...new Set(['TWD', lc, 'USD'].filter(Boolean))])}<button class="btn primary w" data-act="quick" data-trip="${t.id}">＋ 記一筆帳</button></div></div>
-    <div class="money-grid">
-      <div class="card stack"><span class="label">總花費</span><div class="big">${fmtDisp(total)}</div>
+    ${pageCards('money', {
+      total: { title: '總花費', sum: `${fmtDisp(total)} · 今天 ${fmtDisp(todayT)}`, body: `<div class="big">${fmtDisp(total)}</div>
         <p class="small muted">今天 ${fmtDisp(todayT)} · ${ex.length} 筆${missing ? ` · ${missing} 筆缺匯率未計入` : ''}</p>
         ${budgetTWD ? `<div class="progress ${pct > 100 ? 'over' : ''}"><div style="width:${Math.min(100, pct)}%"></div></div>
           <p class="small ${pct > 100 ? 'bad-t' : 'muted'}">預算 ${fmtDisp(budgetTWD)}，${pct > 100 ? `已超支 ${fmtDisp(total - budgetTWD)}` : `還剩 ${fmtDisp(budgetTWD - total)}`}</p>` : ''}
-        <button class="btn-sm w" data-act="set-budget" data-trip="${t.id}" style="align-self:flex-start">${budgetTWD ? '修改預算' : '設定預算'}</button></div>
-      <div class="card stack"><div class="section-h"><span class="label">錢包現金</span><button class="btn-sm w" data-act="add-cash" data-trip="${t.id}">＋ 新增換匯</button></div>
-        ${Object.keys(cl).length ? Object.entries(cl).map(([c, v]) => `<div class="cash-row"><b class="mono">${esc(cur$(v, c))}</b>${cashRate(t, c) ? `<span class="small muted">實際匯率 1 ${esc(c)} = NT$ ${money(cashRate(t, c), 4)}</span>` : ''}${v < 0 ? '<span class="chip bad" style="align-self:flex-start">現金支出超過換匯金額</span>' : ''}</div>`).join('')
+        <button class="btn-sm w" data-act="set-budget" data-trip="${t.id}" style="align-self:flex-start">${budgetTWD ? '修改預算' : '設定預算'}</button>` },
+      cash: { title: '錢包現金', tools: `<button class="btn-sm w" data-act="add-cash" data-trip="${t.id}">＋ 新增換匯</button>`,
+        sum: Object.keys(cl).length ? Object.entries(cl).map(([c, v]) => esc(cur$(v, c))).join('、') : '還沒記換匯',
+        body: `${Object.keys(cl).length ? Object.entries(cl).map(([c, v]) => `<div class="cash-row"><b class="mono">${esc(cur$(v, c))}</b>${cashRate(t, c) ? `<span class="small muted">實際匯率 1 ${esc(c)} = NT$ ${money(cashRate(t, c), 4)}</span>` : ''}${v < 0 ? '<span class="chip bad" style="align-self:flex-start">現金支出超過換匯金額</span>' : ''}</div>`).join('')
           : '<p class="small muted">記下出發前換了多少外幣，用現金付的帳會自動扣掉，也會用你實際換到的匯率計算。</p>'}
-        ${items(t.cash).length ? `<details><summary class="small muted">換匯紀錄 ${items(t.cash).length} 筆</summary>${items(t.cash).map(c => `<div class="cash-ex small"><span>${fmtD(c.date)} 用 ${cur$(c.twd)} 換 ${esc(cur$(c.amount, c.cur))}</span><button class="icon-btn w" type="button" data-act="del-cash" data-trip="${t.id}" data-id="${esc(c.id)}" aria-label="刪除這筆換匯紀錄">×</button></div>`).join('')}</details>` : ''}</div>
-      ${moves ? `<div class="card stack"><span class="label">分帳</span>
-        ${moves.length ? moves.map(([a, b, v]) => `<div class="settle"><b>${esc(a)}</b>要給<b>${esc(b)}</b><span class="mono">${fmtDisp(v)}</span></div>`).join('') : '<p class="small muted">目前大家付的剛好，不用找錢。</p>'}
-        <p class="small muted">${ps.map(p => `${esc(p)} 付了 ${fmtDisp(sumPaid(t, p))}`).join('、')}</p></div>` : ''}
-    </div>
-    ${ex.length ? `<div class="money-grid">
-      <div class="card stack"><span class="label">每日花費</span><div class="daybars">${days.map(d => `<div class="db" title="${fmtD(d)} ${fmtDisp(byDay[d] || 0)}"><div class="db-bar"><div style="height:${(byDay[d] || 0) / dayMax * 100}%"></div></div><span class="small muted">${parseD(d).getMonth() + 1}/${parseD(d).getDate()}</span></div>`).join('')}</div></div>
-      <div class="card stack"><span class="label">分類</span><div class="cat-bars">${CATS.filter(k => byCat[k]).map(k => `<div class="cat-bar"><span>${k}</span><div class="bar"><div style="width:${byCat[k] / catMax * 100}%"></div></div><span class="num">${fmtDisp(byCat[k])}</span></div>`).join('')}</div></div>
-    </div>` : ''}
-    ${receipts.length ? `<div class="card stack"><span class="label">收據牆（${receipts.flatMap(receiptList).length}）</span><div class="rwall">${receipts.flatMap(e => receiptList(e).map(r => receiptImg(e, r))).join('')}</div></div>` : ''}
-    <div class="card stack">
-      <div class="section-h"><span class="label">明細</span><div class="todo-tools">
+        ${items(t.cash).length ? `<details><summary class="small muted">換匯紀錄 ${items(t.cash).length} 筆</summary>${items(t.cash).map(c => `<div class="cash-ex small"><span>${fmtD(c.date)} 用 ${cur$(c.twd)} 換 ${esc(cur$(c.amount, c.cur))}</span><button class="icon-btn w" type="button" data-act="del-cash" data-trip="${t.id}" data-id="${esc(c.id)}" aria-label="刪除這筆換匯紀錄">×</button></div>`).join('')}</details>` : ''}` },
+      split: moves && { title: '分帳',
+        sum: moves.length ? `${esc(moves[0][0])} 要給 ${esc(moves[0][1])} ${fmtDisp(moves[0][2])}${moves.length > 1 ? `，還有 ${moves.length - 1} 筆` : ''}` : '不用找錢',
+        body: `${moves.length ? moves.map(([a, b, v]) => `<div class="settle"><b>${esc(a)}</b>要給<b>${esc(b)}</b><span class="mono">${fmtDisp(v)}</span></div>`).join('') : '<p class="small muted">目前大家付的剛好，不用找錢。</p>'}
+        <p class="small muted">${ps.map(p => `${esc(p)} 付了 ${fmtDisp(sumPaid(t, p))}`).join('、')}</p>` },
+      daily: ex.length > 0 && { title: '每日花費', sum: `平均每天 ${fmtDisp(total / Math.max(1, days.length))}`,
+        body: `<div class="daybars">${days.map(d => `<div class="db" title="${fmtD(d)} ${fmtDisp(byDay[d] || 0)}"><div class="db-bar"><div style="height:${(byDay[d] || 0) / dayMax * 100}%"></div></div><span class="small muted">${parseD(d).getMonth() + 1}/${parseD(d).getDate()}</span></div>`).join('')}</div>` },
+      cats: ex.length > 0 && { title: '分類', sum: (() => { const top = CATS.filter(k => byCat[k]).sort((a, b) => byCat[b] - byCat[a])[0]; return top ? `${top}最多 ${fmtDisp(byCat[top])}` : ''; })(),
+        body: `<div class="cat-bars">${CATS.filter(k => byCat[k]).map(k => `<div class="cat-bar"><span>${k}</span><div class="bar"><div style="width:${byCat[k] / catMax * 100}%"></div></div><span class="num">${fmtDisp(byCat[k])}</span></div>`).join('')}</div>` },
+      receipts: receipts.length > 0 && { title: '收據牆', wide: true, sum: `${receipts.flatMap(receiptList).length} 張`,
+        body: `<div class="rwall">${receipts.flatMap(e => receiptList(e).map(r => receiptImg(e, r))).join('')}</div>` },
+      list: { title: '明細', wide: true, sum: `${ex.length} 筆`,
+        tools: `<div class="todo-tools">
         <select id="expCat" aria-label="依分類篩選"><option value="">全部分類</option>${CATS.map(c => `<option ${S.expCat === c ? 'selected' : ''}>${c}</option>`).join('')}</select>
-        ${ps.length > 1 ? `<select id="expPayer" aria-label="依付款人篩選"><option value="">所有人</option>${ps.map(p => `<option ${S.expPayer === p ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select>` : ''}</div></div>
-      ${shown.length ? `<div>${shown.map(e => expRow(t, e)).join('')}</div>` : `<p class="empty-inline">${ex.length ? '沒有符合的花費。' : `還沒有記帳。按「＋ 記一筆帳」${aiOK ? '，可以拍收據讓 Claude 幫你填' : ''}。`}</p>`}
-    </div>
+        ${ps.length > 1 ? `<select id="expPayer" aria-label="依付款人篩選"><option value="">所有人</option>${ps.map(p => `<option ${S.expPayer === p ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select>` : ''}</div>`,
+        body: shown.length ? `<div>${shown.map(e => expRow(t, e)).join('')}</div>` : `<p class="empty-inline">${ex.length ? '沒有符合的花費。' : `還沒有記帳。按「＋ 記一筆帳」${aiOK ? '，可以拍收據讓 Claude 幫你填' : ''}。`}</p>` },
+      rates: ratesCard(t)
+    })}
   </section>`;
 }
 
@@ -1692,13 +1768,12 @@ function renderRatesStrip() {
     <div class="rates-strip">${['JPY', 'THB', 'VND', 'USD'].map(c => `<div class="rate-pill"><span class="small muted">${rateUnit(c)}（${CURS[c]}）</span><b>NT$ ${rateFmt(c)}</b></div>`).join('')}</div></section>`;
 }
 
-function renderRatesTab(t) {
+function ratesCard(t) {
   const c = country(t); const cur = c.cur || 'JPY';
-  if (!S.rates) return `<section class="card empty-inline">尚無匯率資料。</section>`;
+  if (!S.rates) return { title: '匯率換算', wide: true, sum: '尚無匯率資料', body: '<p class="small muted">尚無匯率資料。</p>' };
   const per = twdPer(cur);
   const hist = (S.rates.history || []).slice(-14).reverse();
-  return `<section class="card stack">
-    <div class="section-h"><h2>${CURS[cur]}換算</h2><span class="small muted">${ratesMeta()}</span></div>
+  return { title: `${CURS[cur]}換算`, wide: true, sum: `${rateUnit(cur)} = NT$ ${rateFmt(cur)}`, tools: `<span class="small muted">${ratesMeta()}</span>`, body: `
     <div class="calc">
       <div class="field"><label for="calcTwd">台幣 TWD</label><input id="calcTwd" type="number" inputmode="decimal" placeholder="10000" data-calc="twd" data-cur="${cur}"></div>
       <span class="arrow">⇄</span>
@@ -1711,8 +1786,7 @@ function renderRatesTab(t) {
     ${hist.length ? `<h3 style="font-size:15px">最近紀錄</h3><div class="table-wrap"><table><thead><tr><th>日期</th><th>1 JPY</th><th>1 THB</th><th>100,000 VND</th><th>1 USD</th></tr></thead><tbody>
       ${hist.map(h => `<tr><td>${esc(h.date)}</td><td>${h.JPY ? money(1 / h.JPY, 4) : '—'}</td><td>${h.THB ? money(1 / h.THB, 4) : '—'}</td><td>${h.VND ? money(100000 / h.VND, 0) : '—'}</td><td>${h.USD ? money(1 / h.USD, 2) : '—'}</td></tr>`).join('')}
     </tbody></table></div>` : ''}
-    <p class="small muted">以上為市場中間價（以台幣計）。到銀行換現鈔時，牌告的「現金賣出」價通常會再高 1–3%。</p>
-  </section>`;
+    <p class="small muted">以上為市場中間價（以台幣計）。到銀行換現鈔時，牌告的「現金賣出」價通常會再高 1–3%。</p>` };
 }
 
 // ---------- paste a confirmation email or screenshot → bookings ----------
@@ -2049,15 +2123,17 @@ const HELP = [
   ['[data-act="set-budget"]', '.card', '總花費與預算', '這趟一共花了多少。設定預算後，會顯示還剩多少；超支會變紅色。'],
   ['[data-act="add-cash"]', '.card', '錢包現金', '記下出發前換了多少外幣。用現金付的帳會自動扣掉，也會用你實際換到的匯率算台幣。'],
   ['.settle', '.card', '分帳', '多人同行時，自動算出誰要給誰多少錢，最少次數就能結清。'],
+  ['.pc-fold', '', '收起卡片', '點卡片標題可以收起來，只留一行重點；再點一次打開。'],
+  ['[data-act="page-edit"]', '', '自訂這頁', '勾選要顯示哪些卡片、調整順序。不常看的卡片可以隱藏，所有旅程都會套用。'],
   ['#expCat', '.card', '花費明細', '每一筆花費。點一筆可以修改或刪除；上面可以只看某個分類。'],
   ['.calc', '.card', '匯率換算', '輸入台幣或外幣，馬上換算。下面是最近兩週的匯率走勢。'],
   ['.wish', '', '想去清單', '還沒決定哪天去的店和景點放這裡。按住拖到某一天，就排進行程。'],
   ['.day-chips', '', '選哪一天', '點 Day 1、Day 2… 跳到那一天的行程。'],
   ['.day.sel .plans', '', '行程時間軸', '照時間排好。去過了點圓圈打勾；兩站中間的「前往…」連結會開地圖導航。點項目可以修改。'],
   ['.day.sel .day-h .lnk', '', '整天路線', '把這天還沒去的地點串成一條路線，用 Google 地圖打開。'],
-  ['.tab-body > .card.section-h [data-act="import"]', '.card', '貼上確認信', '最快的方法：把訂票、訂房的確認信文字貼上來，或上傳截圖，自動填好機票和住宿。'],
-  ['.tab-body > section.stack .pass', '', '機票', '航班時間和訂位代號。代號旁的「複製」可以直接貼給航空公司或報到機。'],
-  ['.tab-body > section.stack .card.stay', '', '住宿', '地址、入住退房日期和訂房編號。「地圖」可以直接導航過去。']
+  ['.pc [data-act="import"]', '.card', '貼上確認信', '最快的方法：把訂票、訂房的確認信文字貼上來，或上傳截圖，自動填好機票和住宿。'],
+  ['.pc .pass', '', '機票', '航班時間和訂位代號。代號旁的「複製」可以直接貼給航空公司或報到機。'],
+  ['.pc .card.stay', '', '住宿', '地址、入住退房日期和訂房編號。「地圖」可以直接導航過去。']
 ];
 let helpItems = [];
 function startHelp() {
@@ -2825,6 +2901,9 @@ document.addEventListener('click', async e => {
       }
       case 'plan-done': { const p = (t.plans || {})[id]; if (p) await patchTrip(t.id, { plans: { [id]: { done: !p.done } } }); break; }
       case 'wish-toggle': S.wishOpen = !S.wishOpen; render(); break;
+      case 'pc-fold': { const p = b.dataset.page, k = b.dataset.k; setPage(p, { folded: { ...(pg(p).folded || {}), [k]: !(pg(p).folded || {})[k] } }); render(); break; }
+      case 'page-edit': openPageEdit(b.dataset.page); break;
+      case 'hint-off': S.home = { ...S.home, hints: { ...(S.home.hints || {}), [b.dataset.k]: 1 } }; saveHome(); render(); toast('不會再顯示這行說明。需要時按「？ 說明」。'); break;
       case 'copy-trip':
         openForm({ title: `用「${t.name}」建立新旅程`, fields: tripFields().filter(f => f.k !== 'country' && f.k !== 'coverFile'),
           values: { name: t.name.replace(/^（範例）/, '') + '（新）', city: t.city, travelers: t.travelers }, submit: '建立',

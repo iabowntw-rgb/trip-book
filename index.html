@@ -213,6 +213,7 @@ body.ro .tcard { cursor: default; }
 .pc-h > .todo-tools { flex: 1 1 100%; margin-left: 0; display: flex; gap: 8px; }
 .pc-h > .todo-tools select { flex: 1; min-width: 0; }
 .pc-foot { display: flex; justify-content: flex-end; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+.rate-hist summary { cursor: pointer; padding: 8px 0; min-height: 44px; display: flex; align-items: center; }
 .hint { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .hint-x { border: 1px solid var(--field-edge); background: none; color: inherit; font: inherit; font-size: 13px; border-radius: 999px; padding: 4px 10px; min-height: 32px; cursor: pointer; }
 .big { font-family: var(--f-mono); font-size: 30px; font-weight: 600; line-height: 1.15; }
@@ -629,7 +630,6 @@ body.ro .tl .dot { pointer-events: none; }
   <main id="view">
     <div class="card empty"><h2>正在打開你的旅程本…</h2><p class="muted">載入行程、待辦與匯率</p></div>
   </main>
-  <p class="help">和旅伴分享：在 claude.ai 用右上角「分享」邀請旅伴，設為「編輯者」才能一起勾選待辦、新增訂單和上傳收據。匯率是中間價，銀行換現鈔通常再差 1–3%。</p>
 </div>
 <div class="toast" id="toast" hidden></div>
 <button class="fab w" id="fab" data-act="quick" hidden>＋ 記一筆帳</button>
@@ -1298,14 +1298,14 @@ function renderHomeCore() {
 
 // ---------- home layout (per person) ----------
 const HERO_SECS = { quick: '快捷按鈕', today: '今日行程', money: '花費摘要', todo: '還沒辦的事', glance: '機票住宿摘要' };
-const HOME_SECS = { rates: '近期匯率', later: '之後的旅程', past: '去過的旅程' };
+const HOME_SECS = { rates: '近期匯率', later: '之後的旅程', past: '去過的旅程', ...(WEB ? { backup: '資料備份' } : {}) };
 const AUTO_ORDER = { pre: ['quick', 'todo', 'money', 'glance', 'today'], during: ['quick', 'today', 'money', 'todo', 'glance'], post: ['quick', 'money', 'glance', 'todo', 'today'] };
 function heroOrder(t) {
   const o = (S.home.order || []).filter(k => HERO_SECS[k]);
   return o.length ? [...o, ...Object.keys(HERO_SECS).filter(k => !o.includes(k))] : AUTO_ORDER[phase(t)];
 }
 // todos fold away on their own while travelling, unless you've opened or closed them yourself
-const isFolded = (k, t) => (S.home.collapsed || {})[k] ?? (k === 'todo' && phase(t) === 'during');
+const isFolded = (k, t) => (S.home.collapsed || {})[k] ?? (k === 'backup' || (k === 'todo' && !!t && phase(t) === 'during'));
 function saveHome() {
   savePref('tb.home', S.home);
   if (db && S.uid && S.canWrite) write('prefs', () => db.doc('prefs/' + S.uid).set(S.home)).catch(() => { });
@@ -1582,6 +1582,8 @@ const PAGE_CARDS = {
   book: { import: '貼上確認信', flights: '機票', stays: '住宿' }
 };
 const PAGE_NAMES = { money: '記帳', book: '訂單' };
+const PAGE_HIDDEN = { money: ['receipts'], book: [] }; // 預設隱藏：明細裡已經有收據縮圖
+const pageHidden = p => pg(p).hidden || PAGE_HIDDEN[p];
 const pg = p => ((S.home.pages || {})[p]) || {};
 function pageOrder(p) {
   const all = Object.keys(PAGE_CARDS[p]), o = (pg(p).order || []).filter(k => all.includes(k));
@@ -1593,7 +1595,7 @@ function setPage(p, patch) {
 }
 // cards: { key: { title, sum, tools, body, wide, plain } | false } — false means it doesn't apply to this trip
 function pageCards(p, cards) {
-  const st = pg(p), hid = new Set(st.hidden || []), fold = st.folded || {};
+  const st = pg(p), hid = new Set(pageHidden(p)), fold = st.folded || {};
   const ks = pageOrder(p).filter(k => cards[k]), shown = ks.filter(k => !hid.has(k)), nh = ks.length - shown.length;
   const one = k => {
     const c = cards[k], f = !!fold[k];
@@ -1606,7 +1608,7 @@ function pageCards(p, cards) {
 }
 function openPageEdit(p) {
   let order = pageOrder(p).filter(k => k !== 'import' || aiText);
-  const hid = new Set(pg(p).hidden || []);
+  const hid = new Set(pageHidden(p));
   const f = $('#dlgForm');
   const draw = () => {
     f.innerHTML = `<h2>自訂「${PAGE_NAMES[p]}」</h2>
@@ -1617,7 +1619,7 @@ function openPageEdit(p) {
       <div class="dlg-actions"><button type="button" class="btn ghost" id="peReset" style="margin-right:auto">恢復預設</button><button type="button" class="btn ghost" data-act="dlg-close">取消</button><button type="submit" class="btn primary">儲存</button></div>`;
     f.querySelectorAll('input[data-k]').forEach(cb => { cb.onchange = () => { cb.checked ? hid.delete(cb.dataset.k) : hid.add(cb.dataset.k); }; });
     f.querySelectorAll('[data-mv]').forEach(b => { b.onclick = () => { const i = +b.dataset.mv, j = i + +b.dataset.d; [order[i], order[j]] = [order[j], order[i]]; draw(); }; });
-    $('#peReset').onclick = () => { order = Object.keys(PAGE_CARDS[p]).filter(k => k !== 'import' || aiText); hid.clear(); draw(); };
+    $('#peReset').onclick = () => { order = Object.keys(PAGE_CARDS[p]).filter(k => k !== 'import' || aiText); hid.clear(); PAGE_HIDDEN[p].forEach(k => hid.add(k)); draw(); };
   };
   draw();
   f.onsubmit = e => { e.preventDefault(); setPage(p, { order, hidden: [...hid] }); dlg.close(); render(); };
@@ -1695,11 +1697,11 @@ function renderMoneyTab(t) {
   const pct = budgetTWD ? total / budgetTWD * 100 : 0;
   const days = tripDayList(t), dayMax = Math.max(1, ...days.map(d => byDay[d] || 0)), catMax = Math.max(1, ...Object.values(byCat));
   const cl = cashLeft(t), moves = ps.length > 1 ? settle(t) : null;
-  const shown = ex.filter(e => (!S.expCat || (e.category || '其他') === S.expCat) && (!S.expPayer || (e.paidBy || '我') === S.expPayer));
+  const shown = ex;
   const receipts = ex.filter(e => receiptList(e).length);
   return `<section class="stack">
-    <div class="todo-bar"><h2 style="font-size:17px">記帳</h2>
-      <div class="todo-tools">${dispSeg([...new Set(['TWD', lc, 'USD'].filter(Boolean))])}<button class="btn primary w" data-act="quick" data-trip="${t.id}">＋ 記一筆帳</button></div></div>
+    <div class="todo-bar">${isPhone() ? '' : '<h2 style="font-size:17px">記帳</h2>'}
+      <div class="todo-tools">${dispSeg([...new Set(['TWD', lc, 'USD'].filter(Boolean))])}${isPhone() && inFabWindow(t) && S.canWrite ? '' : `<button class="btn primary w" data-act="quick" data-trip="${t.id}">＋ 記一筆帳</button>`}</div></div>
     ${pageCards('money', {
       total: { title: '總花費', sum: `${fmtDisp(total)} · 今天 ${fmtDisp(todayT)}`, body: `<div class="big">${fmtDisp(total)}</div>
         <p class="small muted">今天 ${fmtDisp(todayT)} · ${ex.length} 筆${missing ? ` · ${missing} 筆缺匯率未計入` : ''}</p>
@@ -1722,10 +1724,7 @@ function renderMoneyTab(t) {
       receipts: receipts.length > 0 && { title: '收據牆', wide: true, sum: `${receipts.flatMap(receiptList).length} 張`,
         body: `<div class="rwall">${receipts.flatMap(e => receiptList(e).map(r => receiptImg(e, r))).join('')}</div>` },
       list: { title: '明細', wide: true, sum: `${ex.length} 筆`,
-        tools: `<div class="todo-tools">
-        <select id="expCat" aria-label="依分類篩選"><option value="">全部分類</option>${CATS.map(c => `<option ${S.expCat === c ? 'selected' : ''}>${c}</option>`).join('')}</select>
-        ${ps.length > 1 ? `<select id="expPayer" aria-label="依付款人篩選"><option value="">所有人</option>${ps.map(p => `<option ${S.expPayer === p ? 'selected' : ''}>${esc(p)}</option>`).join('')}</select>` : ''}</div>`,
-        body: shown.length ? `<div>${shown.map(e => expRow(t, e)).join('')}</div>` : `<p class="empty-inline">${ex.length ? '沒有符合的花費。' : `還沒有記帳。按「＋ 記一筆帳」${aiOK ? '，可以拍收據讓 Claude 幫你填' : ''}。`}</p>` },
+        body: shown.length ? `<div>${shown.map(e => expRow(t, e)).join('')}</div>` : `<p class="empty-inline">${`還沒有記帳。按「＋ 記一筆帳」${aiOK ? '，可以拍收據讓 Claude 幫你填' : ''}。`}</p>` },
       rates: ratesCard(t)
     })}
   </section>`;
@@ -1783,9 +1782,9 @@ function ratesCard(t) {
       ${(c.denoms.length ? c.denoms : [1000, 5000, 10000]).map(d => `<tr><td class="mono">${cur$(d, cur)}</td><td>${cur$(d * per)}</td></tr>`).join('')}
       ${[5000, 10000, 20000, 30000].map(n => `<tr><td class="mono">${cur$(n)} 可換</td><td>${cur$(n / per, cur)}</td></tr>`).join('')}
     </tbody></table></div>
-    ${hist.length ? `<h3 style="font-size:15px">最近紀錄</h3><div class="table-wrap"><table><thead><tr><th>日期</th><th>1 JPY</th><th>1 THB</th><th>100,000 VND</th><th>1 USD</th></tr></thead><tbody>
+    ${hist.length ? `<details class="rate-hist"><summary class="small muted">最近 ${hist.length} 天的匯率紀錄</summary><div class="table-wrap"><table><thead><tr><th>日期</th><th>1 JPY</th><th>1 THB</th><th>100,000 VND</th><th>1 USD</th></tr></thead><tbody>
       ${hist.map(h => `<tr><td>${esc(h.date)}</td><td>${h.JPY ? money(1 / h.JPY, 4) : '—'}</td><td>${h.THB ? money(1 / h.THB, 4) : '—'}</td><td>${h.VND ? money(100000 / h.VND, 0) : '—'}</td><td>${h.USD ? money(1 / h.USD, 2) : '—'}</td></tr>`).join('')}
-    </tbody></table></div>` : ''}
+    </tbody></table></div></details>` : ''}
     <p class="small muted">以上為市場中間價（以台幣計）。到銀行換現鈔時，牌告的「現金賣出」價通常會再高 1–3%。</p>` };
 }
 
@@ -2088,6 +2087,7 @@ async function translateShop() {
 // ---------- help mode: dashed boxes on what's on screen; tap one for a bubble ----------
 // [selector, grow to closest(), title, text]; only the first visible match on the current page gets a box
 const HELP = [
+  ['#helpBtn', '', '和旅伴一起用', WEB ? '網頁版的資料只存在這台裝置。想給旅伴用，把網址傳給他，他會有自己的一本。換手機前記得到首頁最下方按「備份」。' : '在 claude.ai 用右上角「分享」，用旅伴登入 claude.ai 的信箱邀請，權限設為「編輯者」，他就能一起勾待辦、記帳和上傳收據。'],
   ['.brand', '', '加到手機主畫面', '以後點桌面圖示就能直接打開旅程本。iPhone：用 Safari 打開這頁，點下方「分享」→「加入主畫面」。Android：用 Chrome 打開，點右上角「⋮」→「加到主畫面」。'],
   ['#newTripBtn', '', '新增旅程', '選國家和日期就好。簽證、入境卡、保險、eSIM 這些要辦的事會自動列出來。'],
   ['.top [data-act="stats"]', '', '花費統計', '看每一趟旅程、每一年出國花了多少錢。'],
@@ -2125,7 +2125,7 @@ const HELP = [
   ['.settle', '.card', '分帳', '多人同行時，自動算出誰要給誰多少錢，最少次數就能結清。'],
   ['.pc-fold', '', '收起卡片', '點卡片標題可以收起來，只留一行重點；再點一次打開。'],
   ['[data-act="page-edit"]', '', '自訂這頁', '勾選要顯示哪些卡片、調整順序。不常看的卡片可以隱藏，所有旅程都會套用。'],
-  ['#expCat', '.card', '花費明細', '每一筆花費。點一筆可以修改或刪除；上面可以只看某個分類。'],
+  ['[data-pc="list"] .pc-fold', '.card', '花費明細', '每一筆花費，最新的在最上面。點一筆可以修改或刪除。'],
   ['.calc', '.card', '匯率換算', '輸入台幣或外幣，馬上換算。下面是最近兩週的匯率走勢。'],
   ['.wish', '', '想去清單', '還沒決定哪天去的店和景點放這裡。按住拖到某一天，就排進行程。'],
   ['.day-chips', '', '選哪一天', '點 Day 1、Day 2… 跳到那一天的行程。'],
@@ -2859,7 +2859,7 @@ document.addEventListener('click', async e => {
       case 'theme': { const m = loadPref('tb.theme') || 'auto', i = THEMES.findIndex(x => x[0] === m); savePref('tb.theme', THEMES[(i + 1) % 3][0]); applyTheme(); break; }
       case 'fold': {
         const k = b.dataset.sec, ht = S.trips.filter(x => x.end >= today()).sort((x, y) => x.start.localeCompare(y.start))[0];
-        S.home = { ...S.home, collapsed: { ...(S.home.collapsed || {}), [k]: !(ht && isFolded(k, ht)) } };
+        S.home = { ...S.home, collapsed: { ...(S.home.collapsed || {}), [k]: !isFolded(k, ht) } };
         saveHome(); render(); break;
       }
       case 'urgent': S.view = 'trip'; S.tripId = t.id; S.tab = 'todo'; S.todoView = 'todo'; S.todoFilter = 'urgent'; render(); scrollTo(0, 0); break;
@@ -3055,11 +3055,14 @@ function webTop() {
     <div class="dlg-actions"><button class="btn" data-act="web-a2hs-ok">我加好了</button></div></div>`;
 }
 function webBottom() {
-  const last = loadPref('tb.web.backupAt');
-  return `<section class="card web-backup"><h2>資料備份</h2>
+  if ((S.home.hidden || []).includes('backup')) return '';
+  const last = loadPref('tb.web.backupAt'), age = last ? diffDays(today(), last) : null;
+  const late = S.trips.length && (age == null || age > 30);
+  const sum = `<span class="${late ? 'bad-t' : ''}">${last ? `上次備份 ${fmtD(last)}${late ? `，已經 ${age} 天` : ''}` : (S.trips.length ? '還沒備份過' : '')}</span>`;
+  return `<section class="card web-backup">${hsec('backup', null, '資料備份', sum, `
     <p class="small">旅程本的資料只存在<b>這台${isPhoneUA() ? '手機' : '裝置'}</b>裡。換手機或清除瀏覽器資料前，先按「備份」存成一個檔案（可以傳到自己的 LINE 保存），之後用「還原」讀回來。</p>
-    <p class="small muted">${last ? `上次備份：${esc(last)}` : '還沒備份過'}</p>
-    <div class="tm-acts"><button class="btn primary" data-act="web-backup">備份</button><button class="btn" data-act="web-restore">還原</button></div></section>`;
+    <p class="small ${late ? 'bad-t' : 'muted'}">${last ? `上次備份：${fmtD(last)}` : '還沒備份過'}</p>
+    <div class="tm-acts"><button class="btn primary" data-act="web-backup">備份</button><button class="btn" data-act="web-restore">還原</button></div>`)}</section>`;
 }
 const b64 = blob => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = () => no(r.error); r.readAsDataURL(blob); });
 async function webBackup() {
@@ -3095,8 +3098,6 @@ function webRestorePick() {
 async function webBoot() {
   db = LDB; user = null; assets = webAssets; sample = null; downloads = webDownloads; S.uid = 'me';
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch { }
-  const h = document.querySelector('p.help');
-  if (h) h.textContent = '資料只存在這台裝置的瀏覽器裡，記得偶爾到首頁最下方按「備份」。匯率是中間價，銀行換現鈔通常再差 1–3%。';
   try { Object.entries(await IDB.all()).forEach(([id, b]) => BLOBS[id] = URL.createObjectURL(b)); } catch { }
   webRates();
 }

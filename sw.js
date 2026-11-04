@@ -1,5 +1,5 @@
 // 沒網路也能打開：頁面先試網路（才拿得到新版），失敗就用上次存的
-const V = 'tb-cf5ed92953';
+const V = 'tb-a24e6b8dde';
 const CORE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(CORE)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== V).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
